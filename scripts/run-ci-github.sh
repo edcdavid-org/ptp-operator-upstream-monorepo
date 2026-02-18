@@ -6,9 +6,24 @@ VM_IP=$1
 
 JUNIT_OUTPUT_DIR="${JUNIT_OUTPUT_DIR:-/tmp/artifacts}"
 JUNIT_OUTPUT_FILE="${JUNIT_OUTPUT_FILE:-unit_report.xml}"
-SUITE=../test/conformance
+
 export KUBECONFIG=~/.kube/config
-go install github.com/onsi/ginkgo/v2/ginkgo
+
+# Tests always use main branch's test/ with its own go.mod
+# api/ and pkg/ are also copied from main for compatibility
+SUITE="../test/conformance/serial"
+echo "Using test suite: $SUITE"
+
+# Install ginkgo
+GOFLAGS=-mod=mod go install github.com/onsi/ginkgo/v2/ginkgo
+
+# Sync dependencies for test module (tests have their own go.mod)
+cd ../test
+go mod tidy
+cd -
+
+# Use mod mode for tests - test module has its own go.mod
+export GOFLAGS=-mod=mod
 
 export MAX_OFFSET_IN_NS=10000
 export MIN_OFFSET_IN_NS=-10000
@@ -23,7 +38,8 @@ EOF
 export USE_CONTAINER_CMDS=
 export PTP_TEST_CONFIG_FILE="$(pwd)/config.yaml"
 export PTP_LOG_LEVEL=info
-export GOFLAGS=-mod=vendor
+# Use mod mode for tests - test module has its own go.mod
+export GOFLAGS=-mod=mod
 export KEEP_PTPCONFIG=true
 
 export SKIP_INTERFACES="eth0"
@@ -65,15 +81,15 @@ systemctl stop chronyd
 
 set -e
 # OC
-PTP_TEST_MODE=oc ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"/serial
+PTP_TEST_MODE=oc ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"
 # BC
-PTP_TEST_MODE=bc ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"/serial
+PTP_TEST_MODE=bc ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"
 # Dual NIC BC
-PTP_TEST_MODE=dualnicbc ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"/serial
+PTP_TEST_MODE=dualnicbc ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"
 # Dual NIC BC HA
-PTP_TEST_MODE=dualnicbcha ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"/serial
+PTP_TEST_MODE=dualnicbcha ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"
 # Dual port
-PTP_TEST_MODE=dualfollower ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"/serial
+PTP_TEST_MODE=dualfollower ginkgo --skip=".*The interfaces supporting ptp can be discovered correctly.*" --skip="Negative - run pmc in a new unprivileged pod on the slave node.*" -v --keep-going --output-dir=$JUNIT_OUTPUT_DIR --junit-report=$JUNIT_OUTPUT_FILE -v "$SUITE"
 
 # Configure switch1 for authentication testing
 # kubectl apply -f test-config/ptp-security.yaml
