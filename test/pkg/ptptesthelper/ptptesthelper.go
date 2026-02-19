@@ -53,29 +53,34 @@ func BasicClockSyncCheck(fullConfig testconfig.TestConfig, ptpConfig *ptpv1.PtpC
 	if err != nil {
 		logrus.Debugf("could not get nodeName because of err: %s", err)
 	}
-	slaveMaster, err := ptphelper.GetClockIDForeign(profileName, label, nodeName)
-	if errProfile == nil {
-		if fullConfig.PtpModeDesired == testconfig.Discovery {
-			if err != nil {
-				logrus.Infof("slave's Master not detected in log (probably because of log rollover))")
+	var slaveMaster string
+	Eventually(func() error {
+		var foreignErr error
+		slaveMaster, foreignErr = ptphelper.GetClockIDForeign(profileName, label, nodeName)
+		if errProfile == nil {
+			if fullConfig.PtpModeDesired == testconfig.Discovery {
+				if foreignErr != nil {
+					logrus.Infof("slave's Master not detected in log (probably because of log rollover))")
+				} else {
+					logrus.Infof("slave's Master=%s", slaveMaster)
+				}
 			} else {
+				if foreignErr != nil {
+					return errors.Errorf("expects err to be nil, err=%s", foreignErr)
+				}
+				if slaveMaster == "" {
+					return errors.Errorf("expects slaveMaster to not be empty, slaveMaster=%s", slaveMaster)
+				}
 				logrus.Infof("slave's Master=%s", slaveMaster)
 			}
-		} else {
-			if err != nil {
-				return errors.Errorf("expects err to be nil, err=%s", err)
-			}
-			if slaveMaster == "" {
-				return errors.Errorf("expects slaveMaster to not be empty, slaveMaster=%s", slaveMaster)
-			}
-			logrus.Infof("slave's Master=%s", slaveMaster)
 		}
-	}
-	if gmID != nil {
-		if !strings.HasPrefix(slaveMaster, *gmID) {
-			return errors.Errorf("Slave connected to another (incorrect) Master, slaveMaster=%s, gmID=%s", slaveMaster, *gmID)
+		if gmID != nil {
+			if !strings.HasPrefix(slaveMaster, *gmID) {
+				return errors.Errorf("Slave connected to another (incorrect) Master, slaveMaster=%s, gmID=%s", slaveMaster, *gmID)
+			}
 		}
-	}
+		return nil
+	}, pkg.TimeoutIn10Minutes, 30*time.Second).Should(BeNil())
 
 	Eventually(func() error {
 		err = metrics.CheckClockRoleAndOffset(ptpConfig, label, nodeName, expectedClockState, expectedClockRole, isCheckOffset)
